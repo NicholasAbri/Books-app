@@ -1,33 +1,91 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/books";
+const configuredBooksUrl =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api/books";
 
-export async function getBooks() {
-  const res = await fetch(API_URL);
-  if (!res.ok) throw new Error("Failed to fetch books");
-  return res.json();
+// Preserve compatibility with your existing VITE_API_URL,
+// which points to the /api/books endpoint.
+const API_BASE_URL = configuredBooksUrl.replace(/\/books\/?$/, "");
+
+const BOOKS_URL = `${API_BASE_URL}/books`;
+const AUTH_URL = `${API_BASE_URL}/auth`;
+
+async function request(url, options = {}) {
+  const response = await fetch(url, options);
+
+  let data = {};
+
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || "Request failed");
+
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
 }
 
-export async function addBook(book) {
-  const res = await fetch(API_URL, {
+function headers(token, includeJson = false) {
+  const result = {};
+
+  if (includeJson) {
+    result["Content-Type"] = "application/json";
+  }
+
+  if (token) {
+    result.Authorization = `Bearer ${token}`;
+  }
+
+  return result;
+}
+
+// Authentication
+export function registerUser(credentials) {
+  return request(`${AUTH_URL}/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(book),
+    headers: headers(null, true),
+    body: JSON.stringify(credentials),
   });
-  if (!res.ok) throw new Error("Failed to add book");
-  return res.json();
 }
 
-export async function updateBook(id, book) {
-  const res = await fetch(`${API_URL}/${id}`, {
+export function loginUser(credentials) {
+  return request(`${AUTH_URL}/login`, {
+    method: "POST",
+    headers: headers(null, true),
+    body: JSON.stringify(credentials),
+  });
+}
+
+// Books
+export function getBooks(token) {
+  return request(BOOKS_URL, {
+    headers: headers(token),
+  });
+}
+
+export function addBook(book, token) {
+  return request(BOOKS_URL, {
+    method: "POST",
+    headers: headers(token, true),
+    body: JSON.stringify(book),
+  });
+}
+
+export function updateBook(id, book, token) {
+  return request(`${BOOKS_URL}/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: headers(token, true),
     body: JSON.stringify(book),
   });
-  if (!res.ok) throw new Error("Failed to update book");
-  return res.json();
 }
 
-export async function deleteBook(id) {
-  const res = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete book");
-  return res.json();
+export function deleteBook(id, token) {
+  return request(`${BOOKS_URL}/${id}`, {
+    method: "DELETE",
+    headers: headers(token),
+  });
 }
